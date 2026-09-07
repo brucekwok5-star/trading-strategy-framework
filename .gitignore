@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg-info/
+
+# Editors
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Local data
+*.local.json
+.env
+.env.local
+
+# Excel output (regenerated each run)
+/*.xlsx
+
+# Framework runtime data
+~/.tjl_signals/
