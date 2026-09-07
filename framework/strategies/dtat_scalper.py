@@ -13,6 +13,8 @@ Risk Management:
   TP  = entry ± Fibonacci level × candle_range
   SL  = entry ∓ TP_distance / rr_ratio (2:1 default)
 """
+import sys
+
 from strategy_base import Strategy, Signal, BacktestResult
 import yfinance as yf
 import pandas as pd
@@ -41,8 +43,9 @@ class DTATScalperStrategy(Strategy):
                 sig = self._scan_ticker(ticker)
                 if sig:
                     signals.append(sig)
-            except Exception:
-                continue
+            except Exception as e:
+                print(f"[framework] {self.name}: {ticker} scan failed: {e}",
+                      file=sys.stderr)
         return signals
 
     def _scan_ticker(self, ticker: str):

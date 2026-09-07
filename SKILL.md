@@ -472,10 +472,15 @@ def review_and_rank_all():
 
 ```python
 # framework/output.py
-import subprocess, json
+import os
+import subprocess
+import json
 from datetime import datetime
 
-DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1531888048797782026/..."
+# Webhook URL MUST come from environment variable to keep secrets out of git.
+# Set DISCORD_WEBHOOK_URL in your shell or .env file:
+#   export DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN
+DISCORD_WEBHOOK = os.environ.get('DISCORD_WEBHOOK_URL', '')
 
 def signal_table(signals):
     h = "| Ticker | Name | Score | Dir | Entry | TP | SL |\n|--------|------|------:|-----|------:|----:|----:|"

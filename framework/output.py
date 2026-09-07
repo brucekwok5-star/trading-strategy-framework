@@ -1,11 +1,16 @@
 """
 Discord / Telegram output for [framework] signals.
+Webhook URLs MUST come from environment variables to keep secrets out of git.
 """
+import os
 import subprocess
 import json
 from datetime import datetime
 
-DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1531888048797782026/..."
+DISCORD_WEBHOOK = os.environ.get(
+    'DISCORD_WEBHOOK_URL',
+    ''  # blank by default — must be set via env var or .env file
+)
 
 
 def signal_table(signals) -> str:
@@ -25,7 +30,17 @@ def signal_table(signals) -> str:
 
 
 def post_discord(title: str, content: str):
-    """Post to Discord webhook with [framework] tag."""
+    """Post to Discord webhook with [framework] tag.
+
+    Requires DISCORD_WEBHOOK_URL environment variable. If unset, prints a
+    warning so silent failures don't hide Discord delivery issues.
+    """
+    webhook = DISCORD_WEBHOOK or os.environ.get('DISCORD_WEBHOOK_URL', '')
+    if not webhook:
+        print(f"[framework] ⚠️  DISCORD_WEBHOOK_URL not set — Discord post skipped")
+        print(f"         Set env var: export DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...")
+        return False
+
     payload = {
         "content": f"[framework] **{title}** {datetime.now().strftime('%H:%M')}",
         "embeds": [{
@@ -33,12 +48,21 @@ def post_discord(title: str, content: str):
             "color": 0x00ff00 if "LONG" in content else 0xff0000,
         }]
     }
-    subprocess.run(
-        ["curl", "-s", "-X", "POST", DISCORD_WEBHOOK,
-         "-H", "Content-Type: application/json",
-         "-d", json.dumps(payload)],
-        check=False
-    )
+    try:
+        result = subprocess.run(
+            ["curl", "-s", "-X", "POST", webhook,
+             "-H", "Content-Type: application/json",
+             "-d", json.dumps(payload)],
+            capture_output=True, text=True, timeout=15
+        )
+        if '204' in result.stdout or result.returncode == 0:
+            return True
+        else:
+            print(f"[framework] ⚠️  Discord post failed: {result.stdout[:200]}")
+            return False
+    except Exception as e:
+        print(f"[framework] ⚠️  Discord post exception: {e}")
+        return False
 
 
 def daily_report(signals_by_strategy: dict) -> str:

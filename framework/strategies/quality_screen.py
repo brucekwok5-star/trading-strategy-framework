@@ -56,21 +56,16 @@ class QualityScreenStrategy(Strategy):
         }
 
     def scan(self, tickers: List[str], date=None) -> List[Signal]:
-        """
-        Scan quality of each ticker. Returns Signal objects where:
-          - direction = 'LONG' (passed screen)
-          - direction = 'SHORT' (failed screen — exclude from trading)
-        The 'short' here is metaphorical — signals failing quality are
-        negative signals (do NOT trade).
-        """
+        import sys
         signals = []
         for ticker in tickers:
             try:
                 sig = self._scan_ticker(ticker)
                 if sig:
                     signals.append(sig)
-            except Exception:
-                continue
+            except Exception as e:
+                print(f"[framework] {self.name}: {ticker} scan failed: {e}",
+                      file=sys.stderr)
         return signals
 
     def _scan_ticker(self, ticker: str) -> Signal:
@@ -106,18 +101,7 @@ class QualityScreenStrategy(Strategy):
         # - Dividend yield (field 50)
         # - Market cap (field 44)
         # - 52W high/low (fields 48/49)
-        # Note: ROE, gross/net margin, FCF, share dilution NOT in realtime feed
-
-        # Snapshot of available metrics
-        try:
-            from datasources.tencent_qt import _curl
-            clean = ticker.strip()
-            prefix = 'hk' if clean.isdigit() else 'us'
-            url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?_var=kline_1d&param={prefix}{clean},day,,,60,qfq"
-            raw = _curl(url)
-            # Tencent realtime fields are in qt.gtimg.cn response
-        except Exception:
-            pass
+        # Note: ROE, gross/net margin, FCF, share dilution NOT in realtime feed.
 
         # Mark this as a PARTIAL screen — only 3 of 7 metrics available
         metadata = {

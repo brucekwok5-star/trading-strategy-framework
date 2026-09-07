@@ -8,6 +8,7 @@ Logic:
   4. TP: entry ± ATR × atr_multiplier
   5. SL: entry ∓ ATR × sl_multiplier
 """
+import sys
 from strategy_base import Strategy, Signal, BacktestResult
 import yfinance as yf
 import pandas as pd
@@ -35,8 +36,9 @@ class ORBStrategy(Strategy):
                 sig = self._scan_ticker(ticker)
                 if sig:
                     signals.append(sig)
-            except Exception:
-                continue
+            except Exception as e:
+                print(f"[framework] {self.name}: {ticker} scan failed: {e}",
+                      file=sys.stderr)
         return signals
 
     def _scan_ticker(self, ticker: str):
@@ -119,6 +121,90 @@ class ORBStrategy(Strategy):
 
     def backtest(self, tickers: List[str], start_date: str, end_date: str,
                  params=None) -> List[BacktestResult]:
-        # Similar to DTAT — iterate days, simulate entry/exit
-        ...
-        return []
+        """
+        Backtest ORB strategy.
+
+        For each day, simulate:
+        - Use first 30 min range (proxy: day high/low first 30% range as approximation)
+        - Breakout: next bar > range_high → LONG, < range_low → SHORT
+        - TP/SL based on ATR × multipliers
+        """
+        import yfinance as yf
+        merged = {**self.default_params(), **(params or {})}
+        results = []
+
+        for ticker in tickers:
+            try:
+                df = yf.download(
+                    ticker, start=start_date, end=end_date,
+                    interval='1d', auto_adjust=True, progress=False
+                )
+                if df.empty or len(df) < 30:
+                    continue
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(0)
+
+                atr_period = merged['atr_period']
+                atr_series = df['Close'].diff().abs().rolling(atr_period).mean()
+
+                for i in range(atr_period + 1, len(df) - 1):
+                    row = df.iloc[i]
+                    next_row = df.iloc[i + 1]
+                    atr = atr_series.iloc[i]
+                    if pd.isna(atr) or atr == 0:
+                        continue
+
+                    # Approximate ORB from daily: use first 30% of day range as "ORB"
+                    # Real implementation needs intraday 5-min data
+                    day_range = row['High'] - row['Low']
+                    if day_range == 0:
+                        continue
+                    orb_high = row['Open'] + day_range * 0.15
+                    orb_low = row['Open'] - day_range * 0.15
+
+                    # Did next day break out?
+                    next_open = float(next_row['Open'])
+                    if next_open > orb_high * (1 + merged['breakout_pct']):
+                        direction = 'LONG'
+                        entry_px = orb_high * (1 + merged['breakout_pct'])
+                        tp_px = entry_px + merged['atr_multiplier'] * atr
+                        sl_px = entry_px - merged['sl_multiplier'] * atr
+                    elif next_open < orb_low * (1 - merged['breakout_pct']):
+                        direction = 'SHORT'
+                        entry_px = orb_low * (1 - merged['breakout_pct'])
+                        tp_px = entry_px - merged['atr_multiplier'] * atr
+                        sl_px = entry_px + merged['sl_multiplier'] * atr
+                    else:
+                        continue  # no breakout
+
+                    # Exit next day close
+                    exit_px = float(next_row['Close'])
+                    if direction == 'LONG':
+                        # Check if SL hit intraday
+                        if float(next_row['Low']) <= sl_px:
+                            exit_px = sl_px
+                        elif float(next_row['High']) >= tp_px:
+                            exit_px = tp_px
+                        pnl_pct = (exit_px - entry_px) / entry_px * 100
+                    else:
+                        if float(next_row['High']) >= sl_px:
+                            exit_px = sl_px
+                        elif float(next_row['Low']) <= tp_px:
+                            exit_px = tp_px
+                        pnl_pct = (entry_px - exit_px) / entry_px * 100
+
+                    results.append(BacktestResult(
+                        ticker=ticker,
+                        entry_time=str(row.name),
+                        exit_time=str(next_row.name),
+                        direction=direction,
+                        entry_price=round(entry_px, 4),
+                        exit_price=round(exit_px, 4),
+                        pnl_pct=round(pnl_pct, 4),
+                        win=pnl_pct > 0,
+                        params=merged,
+                    ))
+            except Exception as e:
+                print(f"[framework] {self.name}: {ticker} backtest failed: {e}",
+                      file=sys.stderr)
+        return results
