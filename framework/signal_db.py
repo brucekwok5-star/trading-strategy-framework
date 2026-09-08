@@ -68,19 +68,29 @@ def insert_signal(sig) -> dict:
 
 def close_signal(ticker, entry_time, exit_price, exit_time, pnl_pct,
                   remark=None):
-    """Mark a signal as closed with P/L. Optionally append remark."""
+    """Mark a signal as closed with P/L. Optionally append remark.
+
+    If remark is provided, fetches the existing remark, appends the new
+    remark with timestamp, and saves back. This avoids the
+    'remark_append' field typo that was previously a silent no-op.
+    """
     update = {
         'status': 'closed',
         'exit': exit_price,
         'exit_time': exit_time,
         'pnl_pct': pnl_pct,
     }
+
     if remark:
-        # Append to existing remark with timestamp
-        signals_tbl.update(
-            {'remark_append': remark},
+        # Fetch existing remark, append new, save back
+        existing = signals_tbl.search(
             (Q.ticker == ticker) & (Q.entry_time == entry_time)
         )
+        if existing:
+            old_remark = existing[0].get('remark', '')
+            new_remark = (old_remark + ' | ' if old_remark else '') + remark
+            update['remark'] = new_remark
+
     signals_tbl.update(
         update,
         (Q.ticker == ticker) & (Q.entry_time == entry_time)
