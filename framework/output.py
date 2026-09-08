@@ -50,15 +50,24 @@ def post_discord(title: str, content: str):
     }
     try:
         result = subprocess.run(
-            ["curl", "-s", "-X", "POST", webhook,
+            ["curl", "-s", "-w", "\n%{http_code}",
+             "-X", "POST", webhook,
              "-H", "Content-Type: application/json",
              "-d", json.dumps(payload)],
             capture_output=True, text=True, timeout=15
         )
-        if '204' in result.stdout or result.returncode == 0:
+        # Split body from HTTP code; accept 2xx as success
+        parts = result.stdout.rsplit('\n', 1)
+        body = parts[0] if len(parts) > 1 else ''
+        http_code = parts[1] if len(parts) > 1 else '0'
+        try:
+            code = int(http_code.strip())
+        except ValueError:
+            code = 0
+        if 200 <= code < 300:
             return True
         else:
-            print(f"[framework] ⚠️  Discord post failed: {result.stdout[:200]}")
+            print(f"[framework] ⚠️  Discord post failed: HTTP {code} — {body[:200]}")
             return False
     except Exception as e:
         print(f"[framework] ⚠️  Discord post exception: {e}")

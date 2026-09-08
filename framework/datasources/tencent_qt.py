@@ -122,15 +122,18 @@ def fetch_realtime(tickers):
     padded_map = {}
     for t in tickers:
         clean = t.strip()
-        if clean.lower().startswith('hk') or clean.lower().startswith('us'):
+        if clean.lower().startswith('hk'):
             parts.append(clean.lower())
+        elif clean.lower().startswith('us'):
+            # Tencent returns pv_none_match for lowercase us prefix; force uppercase
+            parts.append('us' + clean[2:].upper())
         elif clean.isdigit():
             # HK codes are already 5-6 digits. Tencent expects 'hk' + code as-is
             # (e.g. hk00700 works, NOT hk000700)
             parts.append(f'hk{clean}')
             padded_map[f'hk{clean}'] = clean
         else:
-            parts.append(f'us{clean.lower()}')
+            parts.append(f'us{clean.upper()}')
 
     q = ','.join(parts)
     url = f"https://qt.gtimg.cn/q={q}"
@@ -154,8 +157,13 @@ def fetch_realtime(tickers):
             ticker = padded_map[raw_ticker]
         elif raw_ticker.startswith('hk'):
             ticker = raw_ticker[2:]  # keep as-is (already 5-digit)
-        elif raw_ticker.startswith('us'):
-            ticker = raw_ticker[2:].upper()
+        elif raw_ticker.startswith('us') or '.' in raw_ticker:
+            # US tickers come back either as 'usAAPL' or 'AAPL.OQ' (exchange suffix)
+            # Strip everything after first dot, then strip leading 'us' if present
+            raw_clean = raw_ticker.split('.')[0]
+            if raw_clean.startswith('us'):
+                raw_clean = raw_clean[2:]
+            ticker = raw_clean.upper()
         else:
             ticker = raw_ticker
 

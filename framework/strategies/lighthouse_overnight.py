@@ -15,7 +15,6 @@ HK market via Tencent API (yfinance often returns empty for HK).
 """
 import sys
 from strategy_base import Strategy, Signal, BacktestResult
-import pandas as pd
 from typing import List
 
 

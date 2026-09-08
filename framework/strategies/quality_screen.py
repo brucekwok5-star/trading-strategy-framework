@@ -33,8 +33,7 @@ This is a SCAN strategy that produces:
   - metadata = per-rule pass/fail status
 """
 from strategy_base import Strategy, Signal, BacktestResult
-from typing import List, Dict
-import subprocess
+from typing import List
 
 
 class QualityScreenStrategy(Strategy):
